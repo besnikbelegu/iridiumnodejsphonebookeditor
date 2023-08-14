@@ -1,0 +1,11 @@
+{
+  "name": "iridiumphonebook",
+  "version": "0.0.1",
+  "description": "Iridium Phonebook Editor",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Besnik Belegu",
+  "license": "ISC"
+}
