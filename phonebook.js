@@ -1,11 +1,11 @@
 const { SerialPort } = require('serialport');
-const { ReadlineParser } = require('@serialport/parser-readline')
+const { ReadlineParser } = require('@serialport/parser-readline');
 const rl = require('readline').createInterface({
   input: process.stdin,
   output: process.stdout
 });
-const _port = 'COM4';
 
+const _port = '/dev/tty.usbmodem213101';
 const port = new SerialPort({
   path: _port,
   baudRate: 9600,
@@ -15,38 +15,110 @@ const port = new SerialPort({
 const parser = port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
 const MAX_RETRIES = 10;
 let retryCount = 0;
-let responseReceived = false;
 
-// Read data from the port
-parser.on('data', (data) => {
-  console.log(`Received: ${data}`);
-  responseReceived = true;
+// A function that waits for response data
+function waitForResponse() {
+  return new Promise((resolve) => {
+    let dataBuffer = '';
 
-  if (data.includes('ERROR')) {
-    console.log('Command failed.');
-    // Handle error or retry logic here
-  } else if (data.includes('OK')) {
-    console.log('Command succeeded.');
-    // Handle success logic here
+    // Handler for the 'data' event
+    const dataHandler = (data) => {
+      dataBuffer += data;  // Append received data to the buffer
+    };
+
+    parser.on('data', dataHandler);  // Attach the data handler
+
+    // Set a timeout to finalize the response processing
+    const timeout = setTimeout(() => {
+      parser.removeListener('data', dataHandler);  // Detach the data handler
+
+      // console.log(`Received clear data: ${dataBuffer}`);
+
+      if (dataBuffer.includes('ERROR')) {
+        console.error('Command failed.', dataBuffer);
+      } else if (dataBuffer.includes('OK')) {
+        if (dataBuffer.includes('OK')) {
+          dataBuffer = dataBuffer.split('OK')[0].trim();
+        }
+        console.log('Command succeeded.');
+        // if (dataBuffer.includes('+CAPBR:')) {
+        //   console.log('received a capbr');
+        //   console.log(`Decoded: ${decodeUCS2(dataBuffer.slice(8))}`);
+        // } else {
+        //   console.log(`Received: ${decodeUCS2(dataBuffer)}`);
+        // }
+        if (dataBuffer.includes('+CAPBR:')) {
+
+          if (dataBuffer.includes(",")) {
+            // Extract data after the first colon
+            const rawData = dataBuffer.split('+CAPBR:')[1].trim();
+            // trim OK at the end of dataBuffer if OK exists
+
+            console.log('received a capbr');
+            console.log(`Decoded: ${processAndDecode(rawData)}`);
+          } else {
+            console.log(dataBuffer.split('+CAPBR:')[1].trim());
+          }
+
+        } else {
+          console.log(dataBuffer);
+        }
+      }
+      resolve();
+    }, 12000);  // Wait for 500ms without any new data to finalize the response
+  });
+}
+
+
+async function promptUser() {
+  rl.question('Enter AT command without AT+ (or type "exit" to quit): ', async (command) => {
+    if (command.toLowerCase() === 'exit') {
+      port.close();
+      rl.close();
+      return;
+    }
+
+    console.log(`Sending: AT+${command.toUpperCase()}`);
+    port.write(`AT+${command.toUpperCase()}\r\n`);
+
+    await waitForResponse();
+    promptUser();
+  });
+}
+
+function cleanInput(data) {
+  return data.replace(/[^0-9a-fA-F]/g, '');  // Removing anything that isn't hexadecimal
+}
+
+function decodeUCS2(ucs2String) {
+  let characters = [];
+  for (let i = 0; i < ucs2String.length; i += 4) {
+    let code = parseInt(ucs2String.substr(i, 4), 16);
+    characters.push(String.fromCharCode(code));
   }
-  // Add any other expected response patterns as needed
-});
+  return characters.join('');
+}
+function processAndDecode(data) {
+  // Split at commas
+  const segments = data.split(',');
 
-port.on('open', () => {
-  const _port = 'COM4';
+  // Decode each segment if it has hexadecimal characters, otherwise keep as is
+  const decodedSegments = segments.map(segment => {
+    if (/^[0-9a-fA-F]+$/.test(segment)) {
+      return decodeUCS2(segment);
+    }
+    return segment;
+  });
+
+  // Join the segments using spaces
+  return decodedSegments.join(',');
+}
+
+
+port.on('open', async () => {
   console.log('Connected to ', _port);
-
-  // setTimeout(() => {
-  //   if (!responseReceived) {
-  //     console.error('No response from device. Check the device or the command.');
-  //     port.close();
-  //   }
-  // }, 10000); // 10 seconds timeout
-
-  retryCount = 0; // reset the count on successful connection
-  // Read phonebook. Replace with the actual command.
-  // port.write('AT+CAPBR=?\r\n');
-  promptUser();
+  retryCount = 0;
+  await promptUser();
 });
 
 port.on('error', (err) => {
@@ -57,46 +129,20 @@ port.on('close', () => {
   console.log('Disconnected from', _port);
 });
 
-// Function to get user input
-function promptUser() {
-  // const rl = readlineInterface.createInterface({
-  //   input: process.stdin,
-  //   output: process.stdout
-  // });
-
-  rl.question('Enter AT command (or type "exit" to quit): ', (command) => {
-    if (command.toLowerCase() === 'exit') {
-      port.close();
-      rl.close();
+async function attemptConnection() {
+  try {
+    await port.open();
+  } catch (err) {
+    console.error(`Error opening port: ${err.message}`);
+    if (retryCount < MAX_RETRIES) {
+      retryCount++;
+      console.log(`Retrying... (${retryCount}/${MAX_RETRIES})`);
+      setTimeout(attemptConnection, 5000);
     } else {
-      port.write(`${command}\r\n`);
-      promptUser();  // Get next command
+      console.error('Max retries reached. Exiting.');
+      process.exit();
     }
-  });
-}
-
-// Open the port
-// port.open((err) => {
-//   if (err) {
-//     return console.error(`Error opening port: ${err.message}`);
-//   }
-// });
-
-// Function to attempt connection
-function attemptConnection() {
-  port.open((err) => {
-    if (err) {
-      console.error(`Error opening port: ${err.message}`);
-      if (retryCount < MAX_RETRIES) {
-        retryCount++;
-        console.log(`Retrying... (${retryCount}/${MAX_RETRIES})`);
-        setTimeout(attemptConnection, 5000); // Wait 5 seconds and try again
-      } else {
-        console.error('Max retries reached. Exiting.');
-        process.exit();
-      }
-    }
-  });
+  }
 }
 
 // Start the connection attempt
