@@ -8,8 +8,8 @@ const rl = require('readline').createInterface({
 const _port = '/dev/tty.usbmodem213101';
 const port = new SerialPort({
   path: _port,
-  baudRate: 9600,
-  autoOpen: false
+  baudRate: 19200,
+  autoOpen: true
 });
 
 const parser = port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
@@ -24,48 +24,34 @@ function waitForResponse() {
     // Handler for the 'data' event
     const dataHandler = (data) => {
       dataBuffer += data;  // Append received data to the buffer
+      console.log(`Received: ${dataBuffer}`)
+      if (dataBuffer.includes('OK') || dataBuffer.includes('ERROR')) {
+        parser.removeListener('data', dataHandler);  // Detach the data handler
+        if (dataBuffer.includes('ERROR')) {
+          console.error('Command failed.', dataBuffer);
+        } else {
+          if (dataBuffer.includes('OK')) {
+            dataBuffer = dataBuffer.split('OK')[0].trim();
+          }
+          console.log('Command succeeded.');
+          if (dataBuffer.includes('+CAPBR:')) {
+            if (dataBuffer.includes(",")) {
+              // Extract data after the first colon
+              const rawData = dataBuffer.split('+CAPBR:')[1].trim();
+              console.log('received a capbr');
+              console.log(`Decoded: ${processAndDecode(rawData)}`);
+            } else {
+              console.log(dataBuffer.split('+CAPBR:')[1].trim());
+            }
+          } else {
+            console.log(dataBuffer);
+          }
+        }
+        resolve();
+      }
     };
 
     parser.on('data', dataHandler);  // Attach the data handler
-
-    // Set a timeout to finalize the response processing
-    const timeout = setTimeout(() => {
-      parser.removeListener('data', dataHandler);  // Detach the data handler
-
-      // console.log(`Received clear data: ${dataBuffer}`);
-
-      if (dataBuffer.includes('ERROR')) {
-        console.error('Command failed.', dataBuffer);
-      } else if (dataBuffer.includes('OK')) {
-        if (dataBuffer.includes('OK')) {
-          dataBuffer = dataBuffer.split('OK')[0].trim();
-        }
-        console.log('Command succeeded.');
-        // if (dataBuffer.includes('+CAPBR:')) {
-        //   console.log('received a capbr');
-        //   console.log(`Decoded: ${decodeUCS2(dataBuffer.slice(8))}`);
-        // } else {
-        //   console.log(`Received: ${decodeUCS2(dataBuffer)}`);
-        // }
-        if (dataBuffer.includes('+CAPBR:')) {
-
-          if (dataBuffer.includes(",")) {
-            // Extract data after the first colon
-            const rawData = dataBuffer.split('+CAPBR:')[1].trim();
-            // trim OK at the end of dataBuffer if OK exists
-
-            console.log('received a capbr');
-            console.log(`Decoded: ${processAndDecode(rawData)}`);
-          } else {
-            console.log(dataBuffer.split('+CAPBR:')[1].trim());
-          }
-
-        } else {
-          console.log(dataBuffer);
-        }
-      }
-      resolve();
-    }, 12000);  // Wait for 500ms without any new data to finalize the response
   });
 }
 
