@@ -11,10 +11,7 @@ const rl = require('readline').createInterface({
   output: process.stdout,
   terminal: false
 });
-function writeToCSV(filename, data) {
-  const csvContent = data.map(e => e.join(",")).join("\n");
-  fs.writeFileSync(path.join(__dirname, filename), csvContent, 'utf8');
-}
+
 
 const _port = '/dev/tty.usbmodem213101';
 const port = new SerialPort({
@@ -22,6 +19,28 @@ const port = new SerialPort({
   baudRate: 19200,
   autoOpen: true
 });
+
+function readCSV(filename) {
+  const filePath = path.join(__dirname, filename);
+  const fileContents = fs.readFileSync(filePath, 'utf8');
+  const rows = fileContents.split('\n');
+  return rows.map(row => row.split(','));
+}
+
+async function addMultipleEntriesFromCSV(filename) {
+  const entries = readCSV(filename);
+  for (let entry of entries) {
+    let encodedEntry = processAndDecode(entry.join(','), 'encode');
+    console.log(`Adding entry: ${encodedEntry}`);
+    port.write(`AT+CAPBW=${encodedEntry}\r\n`);
+    await waitForResponse();
+  }
+  console.log('All entries from CSV added.');
+}
+function writeToCSV(filename, data) {
+  const csvContent = data.map(e => e.join(",")).join("\n");
+  fs.writeFileSync(path.join(__dirname, filename), csvContent, 'utf8');
+}
 
 const parser = port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
 const MAX_RETRIES = 10;
@@ -92,7 +111,7 @@ function waitForResponse() {
 
 
 async function promptUser() {
-  let command = readlineSync.question('Enter AT command without AT+ (or type "exit" to quit): ');
+  let command = readlineSync.question('Enter AT command without AT+ \n(or type "exit" to quit;\nread to get all entries\nimport, delete or new): ');
   let userInput = command.toLowerCase();
 
   switch (userInput) {
@@ -122,20 +141,20 @@ async function promptUser() {
           console.log('Deleting all entries');
           console.log(`Sending: AT+CAPBD=ALL\r\n`);
           port.write('AT+CAPBD=ALL\r\n');
-          await waitForResponse().then(promptUser);
+          await waitForResponse();
           break;
         default:
           if (!isNaN(entry)) {
             console.log('Deleting entry', entry)
             console.log(`Sending: AT+CAPBD=${entry}\r\n`);
             port.write(`AT+CAPBD=${entry}\r\n`);
-            await waitForResponse().then(promptUser);
+            await waitForResponse();
           } else {
             console.log('Invalid entry number.');
-            promptUser();
           }
           break;
       }
+      promptUser();
       break;
     case 'new':
       let newentry = readlineSync.question('Enter the entry details: ');
@@ -144,6 +163,13 @@ async function promptUser() {
       console.log(`Sending: AT+CAPBW=${encoded_newentry}\r\n`);
       port.write(`AT+CAPBW=${encoded_newentry}\r\n`);
       await waitForResponse().then(promptUser);
+      break;
+    case 'import':
+      let importfile = readlineSync.question('Enter the filename from which you want to import: ');
+      importfile = `${importfile}.csv`;
+      console.log(`Importing from ${importfile}`);
+      await addMultipleEntriesFromCSV(importfile);
+      promptUser();
       break;
     default:
       console.log(`Sending: AT+${userInput.toUpperCase()}`);
