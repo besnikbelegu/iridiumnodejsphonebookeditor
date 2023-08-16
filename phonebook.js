@@ -1,5 +1,9 @@
 const readlineSync = require('readline-sync');
-
+const { decodeUCS2, encodeUCS2 } = require('./UCS2EncodeDecode');
+const fs = require('fs');
+const path = require('path');
+// Add this at the top of your script
+let phonebookEntries = [];
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 const rl = require('readline').createInterface({
@@ -7,24 +11,10 @@ const rl = require('readline').createInterface({
   output: process.stdout,
   terminal: false
 });
-// const commandHistory = [];
-// let historyIndex = -1;
-
-// rl.input.on('keypress', (char, key) => {
-//   if (key && key.name === 'up' && historyIndex < commandHistory.length - 1) {
-//     historyIndex++;
-//     rl.write(null, { ctrl: true, name: 'u' });
-//     rl.write(commandHistory[commandHistory.length - 1 - historyIndex]);
-//   } else if (key && key.name === 'down' && historyIndex > 0) {
-//     historyIndex--;
-//     rl.write(null, { ctrl: true, name: 'u' });
-//     rl.write(commandHistory[commandHistory.length - 1 - historyIndex]);
-//   }
-//   if (key && key.name === 'return') {
-//     historyIndex = -1;
-//   }
-// });
-
+function writeToCSV(filename, data) {
+  const csvContent = data.map(e => e.join(",")).join("\n");
+  fs.writeFileSync(path.join(__dirname, filename), csvContent, 'utf8');
+}
 
 const _port = '/dev/tty.usbmodem213101';
 const port = new SerialPort({
@@ -102,56 +92,89 @@ function waitForResponse() {
 
 
 async function promptUser() {
-  // rl.question('Enter AT command without AT+ (or type "exit" to quit): ', async (command) => {
-  //   if (command.toLowerCase() === 'exit') {
-  //     port.close();
-  //     rl.close();
-  //     return;
-  //   }
-  //   console.log(`Sending: AT+${command.toUpperCase()}`);
-  //   port.write(`AT+${command.toUpperCase()}\r\n`);
-  //   await waitForResponse();
-  //   // After sending the command, add it to the commandHistory
-  //   // commandHistory.push(command);
-  //   // Ensure historyIndex is at its default state after new input
-  //   // historyIndex = -1;
-  //   promptUser();
-  // });
   let command = readlineSync.question('Enter AT command without AT+ (or type "exit" to quit): ');
+  let userInput = command.toLowerCase();
 
-  if (command.toLowerCase() === 'exit') {
-    port.close();
-    return;
+  switch (userInput) {
+    case 'exit':
+      port.close();
+      return;
+    case 'download':
+      // if (phonebookEntries.length === 0)
+      //   return console.log('No entries to save.');
+      let filename = readlineSync.question('Enter filename: ');
+      // Add this after 'All entries processed.' log statement
+      // let filename = userInput.split('>')[1];
+      console.log(`Writing to CSV file ${filename}.csv`);
+      writeToCSV(`${filename}.csv`, phonebookEntries);
+      phonebookEntries = []; // Reset the array for future use
+      promptUser();
+      break;
+    case 'read':
+      phonebookEntries = [];
+      port.write('AT+CAPBR=?\r\n');
+      waitForResponse().then(promptUser);
+      break;
+    case 'delete':
+      let entry = readlineSync.question('Enter entry number to delete (\'all\' to clear the phonebook): ');
+      switch (entry.toLowerCase()) {
+        case 'all':
+          console.log('Deleting all entries');
+          console.log(`Sending: AT+CAPBD=ALL\r\n`);
+          port.write('AT+CAPBD=ALL\r\n');
+          await waitForResponse().then(promptUser);
+          break;
+        default:
+          if (!isNaN(entry)) {
+            console.log('Deleting entry', entry)
+            console.log(`Sending: AT+CAPBD=${entry}\r\n`);
+            port.write(`AT+CAPBD=${entry}\r\n`);
+            await waitForResponse().then(promptUser);
+          } else {
+            console.log('Invalid entry number.');
+            promptUser();
+          }
+          break;
+      }
+      break;
+    case 'new':
+      let newentry = readlineSync.question('Enter the entry details: ');
+      let encoded_newentry = processAndDecode(newentry, 'encode');
+      console.log(`This is the new entry: ${encoded_newentry}`);
+      console.log(`Sending: AT+CAPBW=${encoded_newentry}\r\n`);
+      port.write(`AT+CAPBW=${encoded_newentry}\r\n`);
+      await waitForResponse().then(promptUser);
+      break;
+    default:
+      console.log(`Sending: AT+${userInput.toUpperCase()}`);
+      port.write(`AT+${userInput.toUpperCase()}\r\n`);
+      waitForResponse().then(promptUser);
+      break;
   }
-
-  console.log(`Sending: AT+${command.toUpperCase()}`);
-  port.write(`AT+${command.toUpperCase()}\r\n`);
-  waitForResponse().then(promptUser);
 }
 
 function cleanInput(data) {
   return data.replace(/[^0-9a-fA-F]/g, '');  // Removing anything that isn't hexadecimal
 }
 
-function decodeUCS2(ucs2String) {
-  let characters = [];
-  for (let i = 0; i < ucs2String.length; i += 4) {
-    let code = parseInt(ucs2String.substr(i, 4), 16);
-    characters.push(String.fromCharCode(code));
-  }
-  return characters.join('');
-}
-function processAndDecode(data) {
+
+function processAndDecode(data, action = 'decode') {
   // Split at commas
   const segments = data.split(',');
 
   // Decode each segment if it has hexadecimal characters, otherwise keep as is
   const decodedSegments = segments.map(segment => {
-    if (/^[0-9a-fA-F]+$/.test(segment)) {
+    if (action === 'decode' && /^[0-9a-fA-F]+$/.test(segment)) {
       return decodeUCS2(segment);
+    } else if (action === 'encode') {
+      return encodeUCS2(segment);
     }
     return segment;
   });
+  // After the data has been processed, push it to the phonebookEntries array
+  if (action === 'decode') {
+    phonebookEntries.push(decodedSegments);
+  }
 
   // Join the segments using spaces
   return decodedSegments.join(',');
