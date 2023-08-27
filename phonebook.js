@@ -2,16 +2,22 @@ const readlineSync = require('readline-sync');
 const { decodeUCS2, encodeUCS2 } = require('./UCS2EncodeDecode');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config();
+const config = require('./config');
 
 let phonebookEntries = [];
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 
-const _port = '/dev/tty.usbmodem21401';
+/* The line `const _port = '/dev/tty.usbmodem21401';` is assigning the value `'/dev/tty.usbmodem21401'`
+to the variable `_port`. This variable is later used to specify the path of the serial port that the
+code will connect to. */
+const _port = config.PORT;
 const port = new SerialPort({
   path: _port,
-  baudRate: 19200,
-  autoOpen: true
+  baudRate: config.AUTOBAUD,  // Convert string to number
+  autoOpen: config.AUTOOPEN,  // Convert string to boolean
+  autoBaud: config.AUTOBAUD
 });
 
 function readCSV(filename) {
