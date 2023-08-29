@@ -7,6 +7,8 @@ module.exports = {
   ResponseTypes: {
     OK: 'OK',
     ERROR: 'ERROR',
-    CAPBR: '+CAPBR:'
+    CAPBR: '+CAPBR:',
+    CAPBD: 'CAPBD',
+    CAPBW: 'CAPBW'
   }
 };

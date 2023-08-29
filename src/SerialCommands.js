@@ -42,6 +42,7 @@ const waitForResponse = () => {
   return new Promise((resolve, reject) => {
     let dataBuffer = '';
     const dataHandler = (data) => {
+      // console.log(`Received data: ${data}`);
       dataBuffer += data;
       if (dataBuffer.includes(ResponseTypes.OK) || dataBuffer.includes(ResponseTypes.ERROR)) {
         parser.removeListener('data', dataHandler);
@@ -49,33 +50,39 @@ const waitForResponse = () => {
           console.error(`Command failed: ${dataBuffer}`);
           reject(new Error('Command failed'));
         } else {
-          if (dataBuffer.includes(ResponseTypes.ERROR)) {
-            console.error('Command failed.', dataBuffer);
-            reject(new Error('Command failed'));
-          } else {
-            if (dataBuffer.includes(ResponseTypes.OK)) {
+          if (dataBuffer.includes(ResponseTypes.OK)) {
+            dataBuffer = dataBuffer.split(ResponseTypes.OK)[0].trim();
+          }
+          if (dataBuffer.includes(ResponseTypes.CAPBR)) {
+            // console.log(`ResponseTypes.CAPBR: ${dataBuffer}`)
+            if (dataBuffer.includes(",")) {
+              const rawData = dataBuffer.split(ResponseTypes.CAPBR)[1].trim();
+              processAndDecode(rawData);
+            } else {
               dataBuffer = dataBuffer.split(ResponseTypes.OK)[0].trim();
-            }
-
-            if (dataBuffer.includes(ResponseTypes.CAPBR)) {
-              if (dataBuffer.includes(",")) {
-                const rawData = dataBuffer.split(ResponseTypes.CAPBR)[1].trim();
-                // console.log(`${processAndDecode(rawData)}`);
-                processAndDecode(rawData);
-              } else {
-                dataBuffer = dataBuffer.split(ResponseTypes.OK)[0].trim();
-                dataBuffer = dataBuffer.split(ResponseTypes.CAPBR)[1].trim()
-                if (!isNaN(dataBuffer))
-                  totalEntries = dataBuffer;
-                console.log('Total: ', totalEntries, 'entries');
+              dataBuffer = dataBuffer.split(ResponseTypes.CAPBR)[1].trim();
+              if (!isNaN(dataBuffer)) {
+                totalEntries = dataBuffer;
                 if (totalEntries > 0) {
                   readPhoneBookEntry(totalEntries);
                   return;
+                } else {
+                  console.log('No entries found!');
                 }
               }
             }
-            else {
-              console.log(dataBuffer);
+          } else if (dataBuffer.includes(ResponseTypes.CAPBD)) {
+            // console.log(`ResponseTypes.CAPBD: ${dataBuffer}`)
+            if (dataBuffer.includes("CAPBD=ALL")) {
+              // Do nothing or log something specific to CAPBD
+              console.log('Deleted all phonebook entries!');
+            } else {
+              console.log(`Entry deleted successfully: ${dataBuffer}`);
+            }
+          } else {
+            // Only log "Command executed successfully" if none of the above conditions are met
+            if (!dataBuffer.includes(ResponseTypes.CAPBW) && !dataBuffer.includes(ResponseTypes.CAPBD)) {
+              console.log(`Command executed successfully: ${dataBuffer}`);
             }
           }
           resolve(dataBuffer);
@@ -148,12 +155,14 @@ async function executeCommnad(userInput) {
             console.log('Deleting all entries');
             await sendCommand(deleteAll);
             await waitForResponse();
+            phonebookEntries.length = 0;
             break;
           default:
             if (!isNaN(entry)) {
               console.log('Deleting entry', entry);
               await sendCommand(`${deleteCmd}${entry}`);
               await waitForResponse();
+              phonebookEntries.splice(entry, 1);
             } else {
               console.log('Invalid entry number.');
             }
@@ -208,17 +217,6 @@ async function mainLoop() {
   try {
     let exit = false;
     while (!exit) {
-      // let command = readlineSync.question('Enter AT command without AT+ \n(or type "exit" to quit;\nread to get all entries\nimport, delete, new or save): ');
-      // let userInput = command.toLowerCase();
-      // if (command.toLowerCase() === 'exit') {
-      //   exit = true;
-      //   port.close();
-      // } else {
-      //   if (command.toLowerCase().length > 0) {
-      //     console.log("Please wait while the command is being executed...");
-      //     await executeCommnad(command.toLowerCase());
-      //   }
-      // }
       console.log('Please choose an option:');
       console.log('1. Read all entries');
       console.log('2. Save to CSV');
@@ -288,24 +286,62 @@ async function gracefulShutdown() {
     }
   });
 }
-
 async function addMultipleEntriesFromCSV(filename) {
   try {
     const entries = readCSV(filename);
-    // console.log(`Adding ${entries.length} entries from ${filename}.`)
+    const totalEntries = entries.length;
+    let completedEntries = 0;
+
     displayPhoneEntryAsTable(entries);
+
     for (let entry of entries) {
-      // console.log(`typeof entry: ${typeof entry}`);
-      // console.log(`entry: ${entry}`);
       let encodedEntry = processAndDecode(entry, 'encode');
-      console.log(`Adding entry: ${encodedEntry}`);
-      await sendCommand(`${newCmd}${encodedEntry}`)
+      // console.log(`Adding entry: ${encodedEntry}`);
+      await sendCommand(`${newCmd}${encodedEntry}`);
       await waitForResponse();
+
+      // Increment the counter for completed entries
+      completedEntries++;
+
+      // Calculate the percentage of completed entries
+      const percentageComplete = ((completedEntries / totalEntries) * 100).toFixed(2);
+
+      // Output the percentage
+      process.stdout.clearLine();
+      process.stdout.cursorTo(0);
+      process.stdout.write(`Adding entry '${entry}' ${percentageComplete}% total complete`);
     }
-    console.log('All entries from CSV added.');
+
+    // Move to the next line after the loop is done
+    process.stdout.write(`All entries from CSV added.\n`);
+    // await restartConnection();
+
   } catch (error) {
     console.error(`Error: ${error.message}`);
   }
+}
+async function restartConnection() {
+  return new Promise((resolve, reject) => {
+    port.close(err => {
+      if (err) {
+        console.error(`Error while closing the port: ${err.message}`);
+        reject(err);
+        return;
+      }
+      console.log("Serial port closed successfully.");
+
+      // Reopen the port
+      port.open(err => {
+        if (err) {
+          console.error(`Error while reopening the port: ${err.message}`);
+          reject(err);
+          return;
+        }
+        console.log("Serial port reopened successfully.");
+        resolve();
+      });
+    });
+  });
 }
 
 // Function to list serial ports
@@ -314,7 +350,6 @@ const listPorts = async () => {
     const ports = await SerialPort.list();
     const usbmodems = ports.filter(_port => _port.path && _port.path.includes('usbmodem'));
     console.log("Available Serial Ports:");
-    console.log(`0. ${port.path} - DEFAULT`);
     usbmodems.forEach((_port, index) => {
       console.log(`${index + 1}. ${_port.path} - ${_port.manufacturer || 'N/A'}`);
     });
@@ -326,7 +361,7 @@ const listPorts = async () => {
 
 // Function to select a port
 const selectPort = (ports) => {
-  const choice = readlineSync.questionInt("Select a port by entering its number (Default: 0): ", { defaultInput: '0' });
+  const choice = readlineSync.questionInt("Select a port by entering its number (Default: 1): ", { defaultInput: '1' });
   const index = choice - 1;
   if (ports[index]) {
     console.log(`You selected ${ports[index].path}`);
