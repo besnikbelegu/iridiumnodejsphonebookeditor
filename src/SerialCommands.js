@@ -314,40 +314,18 @@ async function addMultipleEntriesFromCSV(filename) {
 
     // Move to the next line after the loop is done
     process.stdout.write(`All entries from CSV added.\n`);
-    // await restartConnection();
 
   } catch (error) {
     console.error(`Error: ${error.message}`);
   }
 }
-async function restartConnection() {
-  return new Promise((resolve, reject) => {
-    port.close(err => {
-      if (err) {
-        console.error(`Error while closing the port: ${err.message}`);
-        reject(err);
-        return;
-      }
-      console.log("Serial port closed successfully.");
 
-      // Reopen the port
-      port.open(err => {
-        if (err) {
-          console.error(`Error while reopening the port: ${err.message}`);
-          reject(err);
-          return;
-        }
-        console.log("Serial port reopened successfully.");
-        resolve();
-      });
-    });
-  });
-}
 
 // Function to list serial ports
 const listPorts = async () => {
   try {
     const ports = await SerialPort.list();
+    const modemName = process.platform !== 'win32' ? 'usbmodem' : 'COM';
     const usbmodems = ports.filter(_port => _port.path && _port.path.includes('usbmodem'));
     console.log("Available Serial Ports:");
     usbmodems.forEach((_port, index) => {
