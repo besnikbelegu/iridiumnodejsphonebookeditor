@@ -1,44 +1,96 @@
-const { readCSV, writeToCSV, phonebookEntries, displayPhoneEntryAsTable } = require('./phonebookEntries').PhoneBookDB;
+const { readCSV, writeToCSV, phonebookEntries, displayPhoneEntryAsTable } = require('./models/PhoneBookDB').PhoneBookDB;
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
-const { processAndDecode } = require('./UCS2EncodeDecode');
-const { ATCommands, ResponseTypes } = require('./ATCommands');
+const { processAndDecode } = require('./utils/EncodeDecode');
+const { read, delete: deleteCmd, deleteAll, new: newCmd, readAll, ResponseTypes } = require('./commands/ATCommands');
 const readlineSync = require('readline-sync');
-const config = require('./config');
+const config = require('./utils/config');
 const fs = require('fs');
+
 const _port = config.PORT;
 const port = new SerialPort({
   path: _port,
-  baudRate: config.AUTOBAUD,  // Convert string to number
-  autoOpen: config.AUTOOPEN,  // Convert string to boolean
+  baudRate: config.BAUDRATE,
+  autoOpen: config.AUTOOPEN,
   autoBaud: config.AUTOBAUD
 });
+
 const parser = port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
 const MAX_RETRIES = 10;
 let retryCount = 0;
 let totalEntries = 0;
+
 port.on('open', async () => {
-  console.log('Connected to ', _port);
+  console.log(`Connected to ${_port}`);
   retryCount = 0;
   await mainLoop();
-  // mainMenu();
 });
+
 port.on('error', (err) => {
   console.error(`Error: ${err.message}`);
 });
-port.on('disconnect', function () {
+
+port.on('disconnect', () => {
   console.log('Device disconnected');
 });
 
 port.on('close', () => {
-  console.log('Disconnected from', _port);
+  console.log(`Disconnected from ${_port}`);
 });
 
+const waitForResponse = () => {
+  return new Promise((resolve, reject) => {
+    let dataBuffer = '';
+    const dataHandler = (data) => {
+      dataBuffer += data;
+      if (dataBuffer.includes(ResponseTypes.OK) || dataBuffer.includes(ResponseTypes.ERROR)) {
+        parser.removeListener('data', dataHandler);
+        if (dataBuffer.includes(ResponseTypes.ERROR)) {
+          console.error(`Command failed: ${dataBuffer}`);
+          reject(new Error('Command failed'));
+        } else {
+          if (dataBuffer.includes(ResponseTypes.ERROR)) {
+            console.error('Command failed.', dataBuffer);
+            reject(new Error('Command failed'));
+          } else {
+            if (dataBuffer.includes(ResponseTypes.OK)) {
+              dataBuffer = dataBuffer.split(ResponseTypes.OK)[0].trim();
+            }
 
+            if (dataBuffer.includes(ResponseTypes.CAPBR)) {
+              if (dataBuffer.includes(",")) {
+                const rawData = dataBuffer.split(ResponseTypes.CAPBR)[1].trim();
+                // console.log(`${processAndDecode(rawData)}`);
+                processAndDecode(rawData);
+              } else {
+                dataBuffer = dataBuffer.split(ResponseTypes.OK)[0].trim();
+                dataBuffer = dataBuffer.split(ResponseTypes.CAPBR)[1].trim()
+                if (!isNaN(dataBuffer))
+                  totalEntries = dataBuffer;
+                console.log('Total: ', totalEntries, 'entries');
+                if (totalEntries > 0) {
+                  readPhoneBookEntry(totalEntries);
+                  return;
+                }
+              }
+            }
+            else {
+              console.log(dataBuffer);
+            }
+          }
+          resolve(dataBuffer);
+        }
+      }
+    };
+    parser.on('data', dataHandler);
+  });
+};
+
+// ... (rest of your functions like readPhoneBookEntry, executeCommand, mainLoop, etc., with improved error handling)
 async function readPhoneBookEntry(_totalEntries, _currentEntry = 0) {
   try {
     if (_currentEntry < _totalEntries) {
-      await sendCommand(`${ATCommands.read}${_currentEntry}`);
+      await sendCommand(`${read}${_currentEntry}`);
       await waitForResponse();
       _currentEntry++;
       // Calculate the percentage of completed entries
@@ -63,54 +115,6 @@ async function readPhoneBookEntry(_totalEntries, _currentEntry = 0) {
   }
 
 }
-
-async function waitForResponse() {
-  return new Promise((resolve, reject) => {
-    let dataBuffer = '';
-    const dataHandler = (data) => {
-      dataBuffer += data;
-      if (dataBuffer.includes(ResponseTypes.OK) || dataBuffer.includes(ResponseTypes.ERROR)) {
-        // console.log('Processing the response with OK or ERROR');
-        parser.removeListener('data', dataHandler);
-        if (dataBuffer.includes(ResponseTypes.ERROR)) {
-          console.error('Command failed.', dataBuffer);
-          reject(new Error('Command failed'));
-        } else {
-          if (dataBuffer.includes(ResponseTypes.OK)) {
-            dataBuffer = dataBuffer.split(ResponseTypes.OK)[0].trim();
-          }
-
-          if (dataBuffer.includes(ResponseTypes.CAPBR)) {
-            if (dataBuffer.includes(",")) {
-              const rawData = dataBuffer.split(ResponseTypes.CAPBR)[1].trim();
-              // console.log(`${processAndDecode(rawData)}`);
-              processAndDecode(rawData);
-            } else {
-              dataBuffer = dataBuffer.split(ResponseTypes.OK)[0].trim();
-              dataBuffer = dataBuffer.split(ResponseTypes.CAPBR)[1].trim()
-              if (!isNaN(dataBuffer))
-                totalEntries = dataBuffer;
-              console.log('Total: ', totalEntries, 'entries');
-              if (totalEntries > 0) {
-                readPhoneBookEntry(totalEntries);
-                return;
-              }
-            }
-          }
-          else {
-            console.log(dataBuffer);
-          }
-        }
-        resolve(dataBuffer);
-      } else {
-        process.stdout.write(`.`);
-      }
-    };
-
-    parser.on('data', dataHandler);
-  });
-}
-
 async function executeCommnad(userInput) {
   try {
     switch (userInput) {
@@ -130,30 +134,25 @@ async function executeCommnad(userInput) {
       case 'read':
         console.log(`'${userInput}' command executing!`)
         phonebookEntries.length = 0;
-        await sendCommand(ATCommands.readAll);
+        await sendCommand(readAll);
         await waitForResponse();
         console.log("Command executed. Ready for the next command.");
         break;
       case 'delete':
         console.log(`'${userInput}' command executing!`)
-        // phonebookEntries.forEach((entry, index) => {
-        //   console.log(`${index + 1}. ${entry.replace('\n', '')}`);
-        // })
-
         displayPhoneEntryAsTable(phonebookEntries);
         console.log(`99. DELETE ALL ENTRIES`);
-
         let entry = readlineSync.questionInt('Enter entry number to delete: ');
         switch (entry) {
           case 99:
             console.log('Deleting all entries');
-            await sendCommand(ATCommands.deleteAll);
+            await sendCommand(deleteAll);
             await waitForResponse();
             break;
           default:
             if (!isNaN(entry)) {
               console.log('Deleting entry', entry);
-              await sendCommand(`${ATCommands.delete}${entry}`);
+              await sendCommand(`${deleteCmd}${entry}`);
               await waitForResponse();
             } else {
               console.log('Invalid entry number.');
@@ -166,31 +165,24 @@ async function executeCommnad(userInput) {
         let newentry = readlineSync.question('Enter the entry details: ');
         let encoded_newentry = processAndDecode(newentry, 'encode');
         console.log(`This is the new entry: ${encoded_newentry}`);
-        await sendCommand(`${ATCommands.new}${encoded_newentry}`);
+        await sendCommand(`${newCmd}${encoded_newentry}`);
         await waitForResponse();
         break;
       case 'import':
-        // console.log(`'${userInput}' command executing!`)
-        // let importfile = readlineSync.question('Enter the filename from which you want to import: ');
-        // importfile = `${importfile}.csv`;
-        // console.log(`Importing from ${importfile}`);
-        // await addMultipleEntriesFromCSV(importfile);
-        // break;
-        // List files in 'contacts' folder
         const files = fs.readdirSync('./contacts');
-
         if (files.length === 0) {
           console.log("No files available for import.");
           return;
         }
-
-        console.log("Available files:");
+        console.log(`Available files total ${files.length} files:`);
         files.forEach((file, index) => {
           console.log(`${index + 1}. ${file}`);
         });
-
-        const fileChoice = readlineSync.questionInt('Enter the number of the file you want to import: ');
-
+        const fileChoice = readlineSync.questionInt(
+          `Enter the number of the file you want to import ${files.length == 1 ? '(Default: 1):' : ':'} `,
+          {
+            defaultInput: '1'
+          });
         if (fileChoice < 1 || fileChoice > files.length) {
           console.log("Invalid choice. Please try again.");
           return;
@@ -199,7 +191,7 @@ async function executeCommnad(userInput) {
         const selectedFile = files[fileChoice - 1];
         console.log(`Importing from ${selectedFile}...`);
 
-        await addMultipleEntriesFromCSV(`./contacts/${selectedFile}`);
+        await addMultipleEntriesFromCSV(`${selectedFile}`);
         break;
       default:
         console.log(`Sending a custom command: AT+${userInput.toUpperCase()}`);
@@ -212,7 +204,6 @@ async function executeCommnad(userInput) {
   }
 
 }
-
 async function mainLoop() {
   try {
     let exit = false;
@@ -308,7 +299,7 @@ async function addMultipleEntriesFromCSV(filename) {
       // console.log(`entry: ${entry}`);
       let encodedEntry = processAndDecode(entry, 'encode');
       console.log(`Adding entry: ${encodedEntry}`);
-      await sendCommand(`${ATCommands.new}${encodedEntry}`)
+      await sendCommand(`${newCmd}${encodedEntry}`)
       await waitForResponse();
     }
     console.log('All entries from CSV added.');
@@ -350,8 +341,7 @@ const selectPort = (ports) => {
     return selectPort(ports);
   }
 };
-
-const SerialCommands = {
+module.exports = {
   attemptConnection: async () => {
     try {
       const ports = await listPorts();
@@ -366,12 +356,8 @@ const SerialCommands = {
         setTimeout(attemptConnection, 5000);
       } else {
         console.error('Max retries reached. Exiting.');
-        process.exit();
+        process.exit(1);
       }
-    } finally {
-      await gracefulShutdown();
     }
-  },
-
-}
-module.exports = SerialCommands;
+  }
+};
