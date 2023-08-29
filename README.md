@@ -27,3 +27,7 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+
+## Disclaimer
+
+This project is not affiliated with, endorsed by, or supported by Iridium Communications Inc. or any of its affiliates. The name "Iridium" is used for identification purposes only as it can be used with Iridium Satellite Phone devices. All trademarks and registered trademarks are the property of their respective owners.
