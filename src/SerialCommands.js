@@ -122,12 +122,12 @@ async function readPhoneBookEntry(_totalEntries, _currentEntry = 0) {
   }
 
 }
-async function executeCommnad(userInput) {
+async function executeCommand(userInput) {
   try {
     switch (userInput) {
       case 'save':
         console.log(`'${userInput}' command executing!`)
-        if (phonebookEntries.length <= 0) await executeCommnad('read');
+        if (phonebookEntries.length <= 0) await executeCommand('read');
         if (phonebookEntries.length > 0) {
           let filename = readlineSync.question('Enter filename: ');
           console.log(`Writing to CSV file ${filename}.csv`);
@@ -228,19 +228,19 @@ async function mainLoop() {
       switch (choice) {
         case 1:
           console.log("Reading all entries...");
-          await executeCommnad('read');
+          await executeCommand('read');
           break;
         case 2:
           console.log("Saving to CSV...");
-          await executeCommnad('save');
+          await executeCommand('save');
           break;
         case 3:
           console.log("Importing from CSV...");
-          await executeCommnad('import');
+          await executeCommand('import');
           break;
         case 4:
           console.log("Deleting an entry...");
-          await executeCommnad('delete');
+          await executeCommand('delete');
           break;
         case 5:
           console.log("Exiting...");
