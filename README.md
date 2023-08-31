@@ -3,6 +3,8 @@
 ## Description
 This Node.js project manages the Iridium phonebook through a serial port connection. It allows you to read, save, import, and delete phonebook entries.
 
+[![Wallaby.js](https://img.shields.io/badge/wallaby.js-powered-blue.svg?style=for-the-badge&logo=github)](https://wallabyjs.com/oss/)
+
 ## Requirements
 - Node.js (v18.13.0)
 - npm (v9.8.1)
