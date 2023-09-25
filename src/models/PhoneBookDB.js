@@ -11,7 +11,7 @@ const PhoneBookDB = {
   readCSV: (filename) => {
     const filePath = path.join(__dirname, '../../contacts', filename);
     const fileContents = fs.readFileSync(filePath, 'utf8');
-    return fileContents.split('\n');
+    return fileContents.split(/\r?\n/).filter(Boolean);
   },
   writeToCSV: (filename, data) => {
     const csvContent = data.map(row => row.replace(/\n$/, '')).join("\n");
@@ -21,6 +21,7 @@ const PhoneBookDB = {
     const tableData = [];
     const processRow = (parsedData) => {
       const nv = '-'.repeat(8);
+      const newLine = '\n';
       const dataObject = {
         "Name": parsedData[0] || nv,
         "Home Number": parsedData[1] || nv,
