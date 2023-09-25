@@ -32,4 +32,8 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 
 ## Disclaimer
 
-This project is not affiliated with, endorsed by, or supported by Iridium Communications Inc. or any of its affiliates. The name "Iridium" is used for identification purposes only as it can be used with Iridium Satellite Phone devices. All trademarks and registered trademarks are the property of their respective owners.
+This project is provided "as is" without any guarantees or warranty. In association with the product, the developer makes no warranties of any kind, either express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, of title, or of noninfringement of third party rights. Use of the product by a user is at the user’s risk.
+
+The developer shall not be liable for any damages whatsoever, and in particular the developer shall not be liable for special, indirect, consequential, or incidental damages, or damages for lost profits, loss of revenue, or loss of use, arising out of or related to this project or the information contained in it, whether such damages arise in contract, negligence, tort, under statute, in equity, at law, or otherwise.
+
+By using this project, you acknowledge and agree that you have read and understood this disclaimer and accept all its terms and conditions. If you do not agree with or you are not comfortable with any of the terms and conditions contained in this disclaimer, you should refrain from using this project.

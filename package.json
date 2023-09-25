@@ -1,7 +1,7 @@
 {
-  "name": "iridium-nodejs-phonebook-editor",
+  "name": "satellite-device-nodejs-phonebook-editor",
   "version": "1.0.0",
-  "description": "Iridium NodeJS Phonebook Editor",
+  "description": "Satellite Device NodeJS Phonebook Editor",
   "main": "./src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
