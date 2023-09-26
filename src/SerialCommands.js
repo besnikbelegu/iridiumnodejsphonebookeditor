@@ -93,7 +93,12 @@ const waitForResponse = () => {
   });
 };
 
-// ... (rest of your functions like readPhoneBookEntry, executeCommand, mainLoop, etc., with improved error handling)
+/**
+ * The function `readPhoneBookEntry` reads phone book entries one by one and displays the progress as a
+ * percentage.
+ * @param _totalEntries - The total number of phone book entries that need to be read.
+ * @param [_currentEntry=0] - The current entry number being processed in the phone book.
+ */
 async function readPhoneBookEntry(_totalEntries, _currentEntry = 0) {
   try {
     if (_currentEntry < _totalEntries) {
@@ -122,6 +127,12 @@ async function readPhoneBookEntry(_totalEntries, _currentEntry = 0) {
   }
 
 }
+/**
+ * The function `executeCommand` is an asynchronous function that takes user input as a parameter and executes different commands based on the input.
+ * @param userInput - The `userInput` parameter is a string that represents the command entered by the
+ * user. It is used to determine which action to execute in the switch statement.
+ * @returns The `executeCommand` function does not have a return statement, so it does not explicitly return anything.
+ */
 async function executeCommand(userInput) {
   try {
     switch (userInput) {
@@ -213,6 +224,9 @@ async function executeCommand(userInput) {
   }
 
 }
+/**
+ * The mainLoop function presents a menu to the user and executes different commands based on their choice until the user chooses to exit.
+ */
 async function mainLoop() {
   try {
     let exit = false;
@@ -258,9 +272,12 @@ async function mainLoop() {
 
 }
 
+/**
+ * The function `sendCommand` sends a command to a port and handles any errors that occur.
+ * @param cmd - The `cmd` parameter is a string that represents the command to be sent. It will be written to a port, followed by a carriage return and line feed characters (`\r\n`).
+ */
 async function sendCommand(cmd) {
   try {
-    // console.log(`Sending command: ${cmd}`);
     port.write(`${cmd}\r\n`);
   } catch (error) {
     console.error(`Error: ${error.message}`);
@@ -286,6 +303,10 @@ async function gracefulShutdown() {
     }
   });
 }
+/**
+ * The function `addMultipleEntriesFromCSV` reads entries from a CSV file, processes and encodes each entry, sends a command with the encoded entry, and displays the progress of adding entries as a percentage.
+ * @param filename - The `filename` parameter is the name of the CSV file that contains the entries to be added.
+ */
 async function addMultipleEntriesFromCSV(filename) {
   try {
     const entries = readCSV(filename);
@@ -322,6 +343,9 @@ async function addMultipleEntriesFromCSV(filename) {
 
 
 // Function to list serial ports
+/** The function `listPorts` lists the available serial ports on the system and returns an array of USB modems.
+ * @returns The function `listPorts` returns an array of objects representing the available USB modem ports.
+ */
 const listPorts = async () => {
   try {
     const ports = await SerialPort.list();
@@ -338,6 +362,10 @@ const listPorts = async () => {
 };
 
 // Function to select a port
+/*** The function `selectPort` allows the user to select a port by entering its number and returns the path of the selected port.
+ * @param ports - An array of objects representing available ports. Each object should have a "path" property that represents the path of the port.
+ * @returns The function `selectPort` returns the path of the selected port.
+ */
 const selectPort = (ports) => {
   const choice = readlineSync.questionInt("Select a port by entering its number (Default: 1): ", { defaultInput: '1' });
   const index = choice - 1;
@@ -355,6 +383,7 @@ const selectPort = (ports) => {
   }
 };
 module.exports = {
+  /* This method attempts to establish a connection to a port. */
   attemptConnection: async () => {
     try {
       const ports = await listPorts();

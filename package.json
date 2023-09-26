@@ -1,7 +1,7 @@
 {
   "name": "satellite-device-nodejs-phonebook-editor",
   "version": "1.0.0",
-  "description": "Satellite Device NodeJS Phonebook Editor",
+  "description": "A simple phonebook editor for the Satellite Device using a NodeJS CLI",
   "main": "./src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
