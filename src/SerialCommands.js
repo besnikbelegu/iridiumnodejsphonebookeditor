@@ -5,7 +5,7 @@ const { processAndDecode } = require('./utils/EncodeDecode');
 const { read, delete: deleteCmd, deleteAll, new: newCmd, readAll, ResponseTypes } = require('./commands/ATCommands');
 const readlineSync = require('readline-sync');
 const config = require('./utils/config');
-const fs = require('fs');
+const fs = require('fs');;
 
 const _port = config.PORT;
 const port = new SerialPort({
@@ -266,6 +266,7 @@ async function sendCommand(cmd) {
     console.error(`Error: ${error.message}`);
   }
 }
+
 async function gracefulShutdown() {
   return new Promise((resolve, reject) => {
     console.log("Initiating graceful shutdown...");
@@ -354,11 +355,13 @@ const selectPort = (ports) => {
     return selectPort(ports);
   }
 };
+
 module.exports = {
   attemptConnection: async () => {
     try {
       const ports = await listPorts();
-      process.env.PORT = selectPort(ports);
+      if (ports.length === 0)
+        process.env.PORT = selectPort(ports);
       if (port.isOpen) await port.close();
       await port.open();
     } catch (err) {
