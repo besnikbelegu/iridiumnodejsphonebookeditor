@@ -29,3 +29,11 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+
+## Todo List
+- [ ] Add tests
+- [ ] Add more error handling
+- [ ] Add more documentation
+- [ ] Add more features
+  - [ ] Add the SOS number
+  - [ ] Add the SOS Message
