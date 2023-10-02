@@ -1,5 +1,7 @@
 # Satellite Device Phonebook Manager
 
+![alt text](./0_2.png "Satellite Device Phonebook Manager")
+
 ## Description
 This Node.js project manages the Iridium phonebook through a serial port connection. It allows you to read, save, import, and delete phonebook entries.
 
